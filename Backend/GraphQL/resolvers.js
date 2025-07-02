@@ -178,20 +178,55 @@ const resolvers = {
       return user;
     },
 
-    followAndUnfollow: async (_, { id }, context) => {
-      if (!context?.user?.id) throw new Error("Unauthorized");
-      const reqUserId = context.user.id;
-      if (reqUserId === id) throw new Error("You cannot follow yourself");
+    // followAndUnfollow: async (_, { id }, context) => {
+    //   if (!context?.user?.id) throw new Error("Unauthorized");
+    //   const reqUserId = context.user.id;
+    //   if (reqUserId === id) throw new Error("You cannot follow yourself");
 
+    //   const [currentUser, targetUser] = await Promise.all([
+    //     User.findById(reqUserId),
+    //     User.findById(id),
+    //   ]);
+
+    //   if (!currentUser || !targetUser) throw new Error("User not found");
+
+    //   const isFollowing = currentUser.following.includes(id);
+
+    //   if (isFollowing) {
+    //     await Promise.all([
+    //       User.updateOne({ _id: reqUserId }, { $pull: { following: id } }),
+    //       User.updateOne({ _id: id }, { $pull: { followers: reqUserId } }),
+    //     ]);
+    //   } else {
+    //     await Promise.all([
+    //       User.updateOne({ _id: reqUserId }, { $push: { following: id } }),
+    //       User.updateOne({ _id: id }, { $push: { followers: reqUserId } }),
+    //     ]);
+    //   }
+
+    //   return targetUser;
+    // },
+
+  
+    
+
+
+    followAndUnfollow: async (_, { id }, context) => {
+      const reqUserId = context.user.id;
+    
+      // Prevent self follow
+      if (reqUserId === id) throw new Error("You cannot follow yourself");
+    
+      // Main follow/unfollow logic
       const [currentUser, targetUser] = await Promise.all([
         User.findById(reqUserId),
         User.findById(id),
       ]);
-
+    
       if (!currentUser || !targetUser) throw new Error("User not found");
-
+    
       const isFollowing = currentUser.following.includes(id);
-
+    
       if (isFollowing) {
         await Promise.all([
           User.updateOne({ _id: reqUserId }, { $pull: { following: id } }),
@@ -203,9 +238,30 @@ const resolvers = {
           User.updateOne({ _id: id }, { $push: { followers: reqUserId } }),
         ]);
       }
-
-      return targetUser;
+    
+      // ✅ Fetch updated user with populated followers/following
+      const updatedUser = await User.findById(id)
+        .populate("followers", "_id name username")
+        .populate("following", "_id name username");
+    
+      // ✅ Convert IDs to string manually
+      return {
+        id: updatedUser._id.toString(),
+        name: updatedUser.name,
+        username: updatedUser.username,
+        followers: updatedUser.followers.map(f => ({
+          id: f._id.toString(),
+          name: f.name,
+          username: f.username,
+        })),
+        following: updatedUser.following.map(f => ({
+          id: f._id.toString(),
+          name: f.name,
+          username: f.username,
+        })),
+      };
     },
+    
 
     getUserInformation : async(_,{id}) => {
        const user = await User.findById(id);
@@ -216,4 +272,5 @@ const resolvers = {
 };
 
 module.exports = resolvers;
+
 

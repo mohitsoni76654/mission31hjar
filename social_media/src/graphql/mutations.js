@@ -76,16 +76,16 @@ export const LOGOUT_MUTATION = gql`
   }
 `;
 
-export const SEARCH_USER = gql`
-  query SearchUser($name: String!) {
-    searchUser(name: $name) {
-      id
-      name
-      profileImage
-      bio
-    }
-  }
-`;
+// export const SEARCH_USER = gql`
+//   query SearchUser($name: String!) {
+//     searchUser(name: $name) {
+//       id
+//       name
+//       profileImage
+//       bio
+//     }
+//   }
+// `;
 
 export const SEARCH_USERS = gql`
   query SearchUsers($searchTerm: String!) {
@@ -132,6 +132,22 @@ export const GET_USER_INFO = gql`
         id
       }
       posts {
+        id
+      }
+    }
+  }
+`;
+
+export const FOLLOW_UNFOLLOW = gql`
+  mutation followAndUnfollow($id: ID!) {
+    followAndUnfollow(id: $id) {
+      id
+      name
+      username
+      followers {
+        id
+      }
+      following {
         id
       }
     }

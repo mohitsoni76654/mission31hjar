@@ -2,8 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { FaSearch, FaUser, FaTimes, FaArrowLeft, FaEnvelope, FaPhone, FaCalendar, FaMapMarkerAlt, FaLink, FaHeart, FaComment, FaShare } from 'react-icons/fa';
 import { Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
-import { useApolloClient } from '@apollo/client';
-import { GET_USER_INFO } from '../../graphql/mutations';
+import { useApolloClient, useMutation } from '@apollo/client';
+import { GET_USER_INFO, FOLLOW_UNFOLLOW } from '../../graphql/mutations';
 
 const SearchPage = () => {
   const [searchQuery, setSearchQuery] = useState('');
@@ -181,7 +181,8 @@ const SearchPage = () => {
 
   const handleUserClick = (user) => {
     console.log('Clicked user object:', user);
-    navigate(`/user/${user.id}`);
+    setSelectedUser(user);
+    setShowUserDetails(true);
   };
 
   const formatDate = (dateString) => {
@@ -433,6 +434,11 @@ const RecentSearchCard = ({ user, onClick, onRemove }) => {
 // User Details Modal Component
 const UserDetailsModal = ({ user, onClose }) => {
   console.log('UserDetailsModal rendered with user:', user); // Debug log
+  const [activeTab, setActiveTab] = useState(0); // 0: Posts, 1: Shorts, 2: Tags
+  const [isFollowing, setIsFollowing] = useState(false);
+  const [followUnfollow, { loading: followLoading }] = useMutation(FOLLOW_UNFOLLOW);
+
+
   
   const formatDate = (dateString) => {
     if (!dateString) return 'Unknown';
@@ -444,6 +450,71 @@ const UserDetailsModal = ({ user, onClose }) => {
     });
   };
 
+  // const handleFollowClick = async () => {
+  //   try {
+  //     const { data } = await followUnfollow({
+  //       variables: { id: user.id },
+  //       update: (cache, { data }) => {
+  //         if (data?.followAndUnfollow) {
+  //           // Update the user data in cache
+  //           cache.writeQuery({
+  //             query: GET_USER_INFO,
+  //             variables: { id: user.id },
+  //             data: {
+  //               getUserInformation: {
+  //                 ...user,
+  //                 followers: data.followAndUnfollow.followers,
+  //                 following: data.followAndUnfollow.following,
+  //                 __typename: 'User'
+  //               }
+  //             }
+  //           });
+  //         }
+  //       }
+  //     });
+
+  const handleFollowClick = async () => {
+    try {
+      const { data } = await followUnfollow({
+        variables: { id: user.id },
+        update: (cache, { data }) => {
+          if (data?.followAndUnfollow) {
+            cache.writeQuery({
+              query: GET_USER_INFO,
+              variables: { id: user.id },
+              data: {
+                getUserInformation: {
+                  ...data.followAndUnfollow,
+                  __typename: 'User'
+                }
+              }
+            });
+          }
+        }
+      });
+    
+      // ✅ This line must have semicolon at the end
+      user.following = data.followAndUnfollow.following;
+    
+    } catch (error) {
+      console.error('Follow/Unfollow error:', error);
+      alert('Failed to follow/unfollow user: ' + error.message);
+    }
+    
+  };
+
+
+  // Sample shorts data (you can replace with actual data from backend)
+  const shortsVideos = [
+    "https://images.unsplash.com/photo-1611162617213-7d7a39e9b1d7?auto=format&fit=crop&w=800&q=80",
+    "https://images.unsplash.com/photo-1611162616305-c69b3fa7fbe0?auto=format&fit=crop&w=800&q=80",
+    "https://images.unsplash.com/photo-1611162618071-b39a2ec055fb?auto=format&fit=crop&w=800&q=80",
+    "https://images.unsplash.com/photo-1611162617474-5b5e00f447af?auto=format&fit=crop&w=800&q=80",
+  ];
+
+  // Sample tagged posts data (you can replace with actual data from backend)
+  const taggedPosts = user.posts?.slice(0, 6) || [];
+
   if (!user) {
     console.log('No user data provided to modal');
     return null;
@@ -451,7 +522,7 @@ const UserDetailsModal = ({ user, onClose }) => {
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+      <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
         {/* Modal Header */}
         <div className="flex items-center justify-between p-6 border-b">
           <h2 className="text-xl font-semibold text-gray-900">User Profile</h2>
@@ -488,35 +559,146 @@ const UserDetailsModal = ({ user, onClose }) => {
             </div>
           </div>
 
-          {/* Recent Posts */}
-          {user.posts && user.posts.length > 0 && (
-            <div className="mb-6">
-              <h4 className="font-semibold text-gray-900 mb-4">Recent Posts</h4>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {user.posts.slice(0, 4).map((post) => (
-                  <div key={post.id} className="bg-gray-50 rounded-lg p-4">
-                    {post.imageUrl && (
-                      <img
-                        src={post.imageUrl}
-                        alt={post.caption || 'Post image'}
-                        className="w-full h-32 object-cover rounded-lg mb-3"
-                      />
-                    )}
-                    {post.caption && (
-                      <p className="text-sm text-gray-700 line-clamp-2">{post.caption}</p>
-                    )}
-                    <p className="text-xs text-gray-500 mt-2">
-                      {formatDate(post.createdAt)}
-                    </p>
+          {/* Tabs */}
+          <div className="flex justify-center mb-6">
+            <div className="flex space-x-8">
+              <button
+                onClick={() => setActiveTab(0)}
+                className={`flex flex-col items-center space-y-2 ${
+                  activeTab === 0 ? 'text-purple-600' : 'text-gray-400'
+                }`}
+              >
+                <div className="w-12 h-12 rounded-xl bg-purple-50 flex items-center justify-center">
+                  <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <rect x="3" y="3" width="6" height="6" rx="2"/>
+                    <rect x="15" y="3" width="6" height="6" rx="2"/>
+                    <rect x="15" y="15" width="6" height="6" rx="2"/>
+                    <rect x="3" y="15" width="6" height="6" rx="2"/>
+                  </svg>
+                </div>
+                <span className="text-sm font-medium">Posts</span>
+              </button>
+
+              <button
+                onClick={() => setActiveTab(1)}
+                className={`flex flex-col items-center space-y-2 ${
+                  activeTab === 1 ? 'text-purple-600' : 'text-gray-400'
+                }`}
+              >
+                <div className="w-12 h-12 rounded-xl bg-purple-50 flex items-center justify-center">
+                  <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+                    <circle cx="12" cy="12" r="10" fillOpacity="0.2"/>
+                    <polygon points="10,8 16,12 10,16"/>
+                  </svg>
+                </div>
+                <span className="text-sm font-medium">Shorts</span>
+              </button>
+
+              <button
+                onClick={() => setActiveTab(2)}
+                className={`flex flex-col items-center space-y-2 ${
+                  activeTab === 2 ? 'text-purple-600' : 'text-gray-400'
+                }`}
+              >
+                <div className="w-12 h-12 rounded-xl bg-purple-50 flex items-center justify-center">
+                  <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M7 4a2 2 0 0 0-2 2v14l7-5 7 5V6a2 2 0 0 0-2-2H7z"/>
+                  </svg>
+                </div>
+                <span className="text-sm font-medium">Tagged</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Tab Content */}
+          {activeTab === 0 && (
+            <div>
+              <h4 className="font-semibold text-gray-900 mb-4">Posts ({user.posts?.length || 0})</h4>
+              {user.posts && user.posts.length > 0 ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {user.posts.slice(0, 6).map((post) => (
+                    <div key={post.id} className="bg-gray-50 rounded-lg p-4">
+                      {post.imageUrl && ( 
+                        <img
+                          src={post.imageUrl}
+                          alt={post.caption || 'Post image'}
+                          className="w-full h-32 object-cover rounded-lg mb-3"
+                        />
+                      )}
+                      {post.caption && (
+                        <p className="text-sm text-gray-700 line-clamp-2">{post.caption}</p>
+                      )}
+                      <p className="text-xs text-gray-500 mt-2">
+                        {formatDate(post.createdAt)}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-gray-500 text-center py-8">No posts yet</p>
+              )}
+            </div>
+          )}
+
+          {activeTab === 1 && (
+            <div>
+              <h4 className="font-semibold text-gray-900 mb-4">Shorts ({shortsVideos.length})</h4>
+              <div className="grid grid-cols-3 gap-2">
+                {shortsVideos.map((video, idx) => (
+                  <div key={idx} className="aspect-square rounded-xl overflow-hidden bg-purple-50 cursor-pointer relative group">
+                    <img 
+                      src={video} 
+                      alt="shorts video" 
+                      className="w-full h-full object-cover object-center cursor-pointer" 
+                      style={{maxWidth:'100%',maxHeight:'100%', minHeight: '60px'}} 
+                    />
+                    {/* Play Icon and Duration */}
+                    <div className="absolute bottom-2 left-2 flex items-center gap-1.5 bg-black/50 backdrop-blur-sm px-2 py-1 rounded-full">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="w-3 h-3 text-white" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M8 5v14l11-7z"/>
+                      </svg>
+                      <span className="text-white text-xs font-medium">
+                        {Math.floor(Math.random() * 2 + 1)}:{Math.floor(Math.random() * 59).toString().padStart(2, '0')}
+                      </span>
+                    </div>
                   </div>
                 ))}
               </div>
             </div>
           )}
 
+          {activeTab === 2 && (
+            <div>
+              <h4 className="font-semibold text-gray-900 mb-4">Tagged Posts ({taggedPosts.length})</h4>
+              {taggedPosts.length > 0 ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {taggedPosts.map((post) => (
+                    <div key={post.id} className="bg-gray-50 rounded-lg p-4">
+                      {post.imageUrl && (
+                        <img
+                          src={post.imageUrl}
+                          alt={post.caption || 'Tagged post image'}
+                          className="w-full h-32 object-cover rounded-lg mb-3"
+                        />
+                      )}
+                      {post.caption && (
+                        <p className="text-sm text-gray-700 line-clamp-2">{post.caption}</p>
+                      )}
+                      <p className="text-xs text-gray-500 mt-2">
+                        {formatDate(post.createdAt)}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-gray-500 text-center py-8">No tagged posts yet</p>
+              )}
+            </div>
+          )}
+
           {/* Followers/Following Preview */}
           {(user.followers?.length > 0 || user.following?.length > 0) && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
               {user.followers?.length > 0 && (
                 <div>
                   <h4 className="font-semibold text-gray-900 mb-3">Recent Followers</h4>
@@ -556,8 +738,16 @@ const UserDetailsModal = ({ user, onClose }) => {
           >
             Close
           </button>
-          <button className="bg-purple-600 text-white px-6 py-2 rounded-lg hover:bg-purple-700 transition-colors">
-            Follow
+          <button 
+            onClick={handleFollowClick}
+            disabled={followLoading}
+            className={`px-6 py-2 rounded-lg transition-colors font-medium ${
+              isFollowing 
+                ? 'bg-gray-200 text-gray-700 hover:bg-gray-300' 
+                : 'bg-purple-600 text-white hover:bg-purple-700'
+            } ${followLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
+          >
+            {followLoading ? '...' : (isFollowing ? 'Following' : 'Follow')}
           </button>
         </div>
       </div>
